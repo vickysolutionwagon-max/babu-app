@@ -593,7 +593,7 @@ export default function App() {
       {sidebar && <div style={S.scrim} onClick={() => setSidebar(false)} />}
 
       <div style={S.shell} className="pop-in shell-glow">
-        <aside style={{ ...S.side, transform: sidebar ? "translateX(0)" : "" }} className="side">
+        <aside style={S.side} className={"side" + (sidebar ? " side-open" : "")}>
           <div style={S.sideHead}>
             <span style={S.sideTitle}>Chats</span>
             <button style={S.newBtn} className="new-btn" onClick={newChat}>+ New</button>
@@ -1002,8 +1002,11 @@ const CSS = `
   .pop-in { animation: pop .4s cubic-bezier(.22,1,.36,1); }
   @keyframes pop { from{opacity:0; transform:scale(.98)} to{opacity:1; transform:scale(1)} }
   @media (max-width: 720px) {
-    .side { position: absolute; z-index: 6; height: 100%; transform: translateX(-105%); transition: transform .28s cubic-bezier(.22,1,.36,1); box-shadow: 12px 0 40px -10px rgba(10,8,40,0.4); }
+    .side { position: absolute; top: 0; left: 0; width: 78%; max-width: 300px; z-index: 20; height: 100%; transform: translateX(-105%); transition: transform .28s cubic-bezier(.22,1,.36,1); box-shadow: 12px 0 40px -10px rgba(10,8,40,0.55); }
+    .side.side-open { transform: translateX(0); }
     .menu-btn { display: flex; }
+    .shell-glow { border-radius: 20px; }
+    .shell-glow::before { border-radius: 22px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .blob, .typing span, .msg-in, .fade-in, .pop-in { animation: none !important; }
