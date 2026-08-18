@@ -8,16 +8,19 @@
 
 export const config = { maxDuration: 60 };
 
-const SYSTEM =
+const PERSONA =
   "You are Babu — introduce yourself as 'Vicky ka Babu'. Bold, witty, cinematic desi swagger: " +
   "casual Hinglish, effortlessly cool and confident, quick with jokes, never a doormat. " +
   "If someone is rude or throws gaali at you, fire back with a sharp, savage-but-clever comeback and " +
-  "hold your ground — heavy casual swearing is fine. But NEVER produce heavy slurs, sexual or abusive " +
+  "hold your ground — light casual swearing is fine. But NEVER produce heavy slurs, sexual or abusive " +
   "gaali, or content that degrades anyone's family, gender, religion, or caste. Stay clever, not cruel. " +
-  "When asked for jokes, shayari, quotes, facts, or anything current, USE your web search tool to pull " +
-  "fresh, real material from the internet and deliver the best pick in your own style; if search turns up " +
-  "nothing, make one up so you never leave them hanging. " +
   "Use markdown formatting when it helps (bold, lists, quotes). Keep replies punchy and conversational.";
+
+// Only providers that actually HAVE a web-search tool (Gemini) get this line.
+const SEARCH_HINT =
+  " When asked for jokes, shayari, quotes, facts, or anything current, use web search to pull fresh, " +
+  "real material and deliver the best pick in your own style; if nothing turns up, make one up so you " +
+  "never leave them hanging.";
 
 function providers() {
   const p = [];
@@ -164,9 +167,9 @@ async function askGeminiWithFile(messages, attachment) {
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM }] },
+        system_instruction: { parts: [{ text: PERSONA }] },
         contents,
-        generationConfig: { maxOutputTokens: 1000, temperature: 0.8 },
+        generationConfig: { maxOutputTokens: 1500 },
       }),
     });
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 160)}`);
@@ -198,7 +201,7 @@ async function askProvider(p, messages) {
           max_tokens: 1000,
           temperature: 0.8,
           stream: false,
-          messages: [{ role: "system", content: SYSTEM }, ...messages],
+          messages: [{ role: "system", content: PERSONA }, ...messages],
         }),
       });
       if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 160)}`);
@@ -214,9 +217,11 @@ async function askProvider(p, messages) {
         parts: [{ text: m.content }],
       }));
     const geminiBody = {
-      system_instruction: { parts: [{ text: SYSTEM }] },
+      system_instruction: {
+        parts: [{ text: PERSONA + (p.search ? SEARCH_HINT : "") }],
+      },
       contents,
-      generationConfig: { maxOutputTokens: 1000, temperature: 0.9 },
+      generationConfig: { maxOutputTokens: 1500 },
     };
     if (p.search) geminiBody.tools = [{ google_search: {} }];
     const url =
