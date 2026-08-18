@@ -151,50 +151,21 @@ export default function App() {
         }),
       });
 
-      if (!res.ok || !res.body) {
-        let msg = "Babu couldn't reply. Check the server setup.";
-        try {
-          const j = await res.json();
-          if (j.error) msg = j.error + (j.detail ? " — " + j.detail : "");
-        } catch {}
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const msg =
+          (data && data.error
+            ? data.error + (data.detail ? " — " + data.detail : "")
+            : "") || "Babu couldn't reply. Check the server setup.";
         throw new Error(msg);
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let acc = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          const s = line.trim();
-          if (!s.startsWith("data:")) continue;
-          const payload = s.slice(5).trim();
-          if (!payload || payload === "[DONE]") continue;
-          try {
-            const evt = JSON.parse(payload);
-            const delta = evt.text;
-            if (delta) {
-              acc += delta;
-              updateChat(chatId, [
-                ...nextMsgs,
-                { role: "assistant", content: acc },
-              ]);
-            }
-          } catch {}
-        }
-      }
-
-      if (!acc.trim())
-        updateChat(chatId, [
-          ...nextMsgs,
-          { role: "assistant", content: "…(no response)" },
-        ]);
+      const reply = (data && data.text ? data.text : "").trim();
+      updateChat(chatId, [
+        ...nextMsgs,
+        { role: "assistant", content: reply || "…(no response)" },
+      ]);
     } catch (e) {
       setError(e.message || "Something went wrong. Try again.");
     } finally {
