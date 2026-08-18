@@ -187,6 +187,7 @@ export default function App() {
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const fileRef = useRef(null);
+  const abortRef = useRef(null);
   const dirty = useRef(false);
 
   useEffect(() => {
@@ -331,6 +332,8 @@ export default function App() {
       }));
       payloadMsgs[payloadMsgs.length - 1] = { role: "user", content: modelText };
 
+      const controller = new AbortController();
+      abortRef.current = controller;
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -338,6 +341,7 @@ export default function App() {
           messages: payloadMsgs,
           ...(att ? { attachment: { kind: att.kind, mime: att.mime, data: att.data } } : {}),
         }),
+        signal: controller.signal,
       });
 
       const data = await res.json().catch(() => ({}));
@@ -356,11 +360,24 @@ export default function App() {
         { role: "assistant", content: reply || "…(no response)" },
       ]);
     } catch (e) {
-      setError(e.message || "Something went wrong. Try again.");
+      if (e.name === "AbortError") {
+        // User stopped it — leave their message, add a soft note.
+        updateChat(chatId, [
+          ...nextMsgs,
+          { role: "assistant", content: "_(rok diya)_" },
+        ]);
+      } else {
+        setError(e.message || "Something went wrong. Try again.");
+      }
     } finally {
+      abortRef.current = null;
       setLoading(false);
       inputRef.current?.focus();
     }
+  }
+
+  function stopGenerating() {
+    abortRef.current?.abort();
   }
 
   /* ---------- file handling ---------- */
@@ -532,11 +549,11 @@ export default function App() {
       <Aurora />
       {sidebar && <div style={S.scrim} onClick={() => setSidebar(false)} />}
 
-      <div style={S.shell} className="pop-in">
+      <div style={S.shell} className="pop-in shell-glow">
         <aside style={{ ...S.side, transform: sidebar ? "translateX(0)" : "" }} className="side">
           <div style={S.sideHead}>
             <span style={S.sideTitle}>Chats</span>
-            <button style={S.newBtn} onClick={newChat}>+ New</button>
+            <button style={S.newBtn} className="new-btn" onClick={newChat}>+ New</button>
           </div>
           <div style={S.chatList}>
             {chats.length === 0 && <div style={S.sideEmpty}>No saved chats yet.</div>}
@@ -566,10 +583,10 @@ export default function App() {
             <button className="menu-btn" onClick={() => setSidebar((v) => !v)} aria-label="Menu">
               <span style={S.menuLine} /><span style={S.menuLine} /><span style={S.menuLine} />
             </button>
-            <img src={LOGO} alt="Babu" style={S.avatarImg} />
+            <img src={LOGO} alt="Babu" style={S.avatarImg} className="hdr-avatar" />
             <div style={{ lineHeight: 1.15 }}>
-              <div style={S.name}>Babu</div>
-              <div style={S.status}><span style={S.statusDot} /> Vicky ka Babu</div>
+              <div style={S.name} className="hdr-name">Babu</div>
+              <div style={S.status}><span style={S.statusDot} className="status-dot" /> Vicky ka Babu</div>
             </div>
           </header>
 
@@ -593,7 +610,10 @@ export default function App() {
                 style={{ ...S.row, justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}
                 className="msg-in"
               >
-                <div style={{ ...S.bubble, ...(m.role === "user" ? S.userB : S.botB) }}>
+                <div
+                  className={"bubble " + (m.role === "user" ? "user-bubble" : "bot-bubble")}
+                  style={{ ...S.bubble, ...(m.role === "user" ? S.userB : S.botB) }}
+                >
                   {m.attachments && m.attachments.length > 0 && (
                     <div style={S.msgChips}>
                       {m.attachments.map((a, ai) => (
@@ -690,23 +710,35 @@ export default function App() {
                 placeholder="Message Babu…"
                 style={S.textarea}
               />
-              <button
-                onClick={() => send()}
-                disabled={loading || (!input.trim() && !attachment && textFiles.length === 0)}
-                style={{
-                  ...S.send,
-                  opacity:
-                    loading || (!input.trim() && !attachment && textFiles.length === 0)
-                      ? 0.4
-                      : 1,
-                }}
-                className="send"
-                aria-label="Send"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M4 12l16-8-6 8 6 8-16-8z" fill="currentColor" strokeLinejoin="round" />
-                </svg>
-              </button>
+              {loading ? (
+                <button
+                  onClick={stopGenerating}
+                  style={{ ...S.send, ...S.stopBtn }}
+                  className="send stop-btn"
+                  aria-label="Stop"
+                  title="Stop"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  onClick={() => send()}
+                  disabled={!input.trim() && !attachment && textFiles.length === 0}
+                  style={{
+                    ...S.send,
+                    opacity:
+                      !input.trim() && !attachment && textFiles.length === 0 ? 0.4 : 1,
+                  }}
+                  className="send"
+                  aria-label="Send"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 12l16-8-6 8 6 8-16-8z" fill="currentColor" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
             </div>
           </footer>
         </div>
@@ -787,6 +819,7 @@ const S = {
   msgChip: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500, background: "rgba(255,255,255,0.22)", borderRadius: 8, padding: "3px 8px" },
   textarea: { flex: 1, resize: "none", maxHeight: 120, border: "1px solid rgba(23,19,39,0.12)", borderRadius: 14, padding: "12px 14px", fontSize: 14.5, fontFamily: "inherit", color: INK, outline: "none", background: "#fff", lineHeight: 1.4 },
   send: { width: 44, height: 44, flexShrink: 0, borderRadius: 14, border: "none", background: `linear-gradient(135deg,${V1},${V2})`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 20px -8px rgba(124,92,255,0.7)", cursor: "pointer", transition: "transform .12s, opacity .15s" },
+  stopBtn: { background: "linear-gradient(135deg,#ff5d73,#ff8a5b)", boxShadow: "0 10px 20px -8px rgba(255,93,115,0.7)" },
   loginCard: { position: "relative", zIndex: 2, width: "100%", maxWidth: 380, background: "rgba(255,255,255,0.92)", backdropFilter: "blur(16px)", borderRadius: 24, padding: "36px 28px", textAlign: "center", boxShadow: "0 40px 90px -30px rgba(10,8,40,0.7)", border: "1px solid rgba(255,255,255,0.5)" },
   loginTitle: { margin: "0 0 4px", fontSize: 26, color: INK, letterSpacing: -0.5 },
   loginSub: { margin: "0 0 22px", fontSize: 14, color: "#8b83a8", lineHeight: 1.5 },
@@ -803,6 +836,46 @@ const CSS = `
   textarea:focus, input:focus { border-color: ${V1} !important; box-shadow: 0 0 0 3px rgba(124,92,255,0.14); }
   .send:hover:not(:disabled) { transform: translateY(-1px) scale(1.04); }
   .attach:hover { background: rgba(124,92,255,0.08) !important; color: ${V1} !important; border-color: rgba(124,92,255,0.3) !important; }
+
+  /* --- dynamic UI polish (bold) --- */
+  .status-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+  @keyframes pulseDot { 0%,100% { box-shadow: 0 0 0 3px rgba(34,211,170,0.25); } 50% { box-shadow: 0 0 0 8px rgba(34,211,170,0.02); } }
+  .hdr-avatar { transition: transform .3s ease; animation: floatAvatar 4s ease-in-out infinite; }
+  @keyframes floatAvatar { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-4px) rotate(2deg); } }
+  .hdr-avatar:hover { transform: scale(1.12) rotate(-4deg); }
+  .hdr-name { background: linear-gradient(90deg, ${INK}, ${V1} 45%, ${TEAL} 70%, ${INK}); background-size: 220% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: nameShine 4s linear infinite; }
+  @keyframes nameShine { to { background-position: 220% center; } }
+
+  .send:active, .attach:active, .new-btn:active { transform: scale(0.9); }
+  .new-btn { transition: transform .12s, filter .2s; animation: btnGlow 2.6s ease-in-out infinite; }
+  @keyframes btnGlow { 0%,100% { box-shadow: 0 4px 14px -4px rgba(124,92,255,0.5); } 50% { box-shadow: 0 6px 22px -2px rgba(124,92,255,0.85); } }
+  .new-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .send { position: relative; overflow: hidden; animation: sendGlow 2.4s ease-in-out infinite; }
+  @keyframes sendGlow { 0%,100% { box-shadow: 0 10px 20px -8px rgba(124,92,255,0.6); } 50% { box-shadow: 0 12px 30px -6px rgba(124,92,255,0.95); } }
+  .send:hover:not(:disabled) { transform: translateY(-2px) scale(1.06); }
+  .send::after { content: ""; position: absolute; top: 0; left: -60%; width: 45%; height: 100%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.5), transparent); transform: skewX(-20deg); animation: shine 2.8s ease-in-out infinite; }
+  @keyframes shine { 0% { left: -60%; } 45%,100% { left: 140%; } }
+  .send.stop-btn { animation: stopPulse .9s ease-in-out infinite; }
+  @keyframes stopPulse { 0%,100% { box-shadow: 0 10px 20px -8px rgba(255,93,115,0.7); transform: scale(1); } 50% { box-shadow: 0 12px 30px -4px rgba(255,93,115,1); transform: scale(1.06); } }
+
+  .bubble { transition: transform .18s ease, box-shadow .22s ease; }
+  .user-bubble { animation: popInR .38s cubic-bezier(.34,1.56,.64,1); }
+  .bot-bubble { animation: popInL .38s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes popInR { 0% { opacity: 0; transform: translateY(12px) scale(.85); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes popInL { 0% { opacity: 0; transform: translateY(12px) scale(.85); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+  .user-bubble:hover { transform: translateY(-2px) scale(1.015); box-shadow: 0 16px 30px -12px rgba(124,92,255,0.8); }
+  .bot-bubble:hover { transform: translateY(-2px); box-shadow: 0 14px 28px -12px rgba(23,19,39,0.4); }
+
+  .chat-item { transition: background .2s ease, color .2s ease, transform .12s ease; }
+  .chat-item:hover { transform: translateX(3px); }
+  .chat-item:active { transform: scale(0.98); }
+  .chip { transition: transform .14s ease, background .2s ease; }
+  .chip:hover { transform: translateY(-2px) scale(1.05); background: rgba(124,92,255,0.16) !important; }
+
+  .shell-glow { position: relative; }
+  .shell-glow::before { content: ""; position: absolute; inset: -2px; border-radius: 28px; padding: 2px; background: linear-gradient(120deg, ${V1}, ${TEAL}, #ff6bcb, ${V1}); background-size: 300% 300%; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0.5; animation: borderFlow 6s linear infinite; pointer-events: none; z-index: 3; }
+  @keyframes borderFlow { to { background-position: 300% center; } }
+  .msg-in { animation: none; }
 
   /* cinematic intro */
   .intro-wrap { cursor: pointer; transition: opacity .6s ease, transform .6s ease; }
