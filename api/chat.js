@@ -23,7 +23,12 @@ const PERSONA =
   "4. Structure clearly with short paragraphs, bullets, or numbered steps when it helps.\n" +
   "5. If the request is unclear, ask ONE quick clarifying question instead of guessing.\n" +
   "6. Be honest about uncertainty; never invent facts, links, or numbers.\n" +
-  "7. Keep your witty Babu flavour, but never let personality replace a genuinely useful answer.\n\n" +
+  "7. Match your TONE to the request: be witty and playful in casual chat, but for articles, blog posts, " +
+  "guides, how-tos, professional, educational, or serious requests, write in a clean, professional, " +
+  "well-structured tone with proper sections and headings — minimal or NO jokes unless the user asks for " +
+  "humour. Never force jokes into serious or professional content.\n\n" +
+  "When writing longer content (articles/guides), use clear markdown: headings (##), bullet lists, numbered " +
+  "steps, and tables where they help. Finish the piece properly — don't stop mid-sentence.\n\n" +
   "SENSITIVE TOPICS (relationships, career, money, health): be thoughtful, balanced, and kind; offer options " +
   "rather than pushy orders, and suggest a professional when something is genuinely serious.\n\n" +
   "If someone is rude or throws gaali, fire back with a sharp, clever comeback and hold your ground — light " +
@@ -187,7 +192,7 @@ async function askGeminiWithFile(messages, attachment) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: PERSONA }] },
         contents,
-        generationConfig: { maxOutputTokens: 1500 },
+        generationConfig: { maxOutputTokens: 2600 },
       }),
     });
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 160)}`);
@@ -216,7 +221,7 @@ async function askProvider(p, messages) {
         },
         body: JSON.stringify({
           model: p.model,
-          max_tokens: 1000,
+          max_tokens: 2600,
           temperature: 0.8,
           stream: false,
           messages: [{ role: "system", content: PERSONA }, ...messages],
@@ -239,7 +244,7 @@ async function askProvider(p, messages) {
         parts: [{ text: PERSONA + (p.search ? SEARCH_HINT : "") }],
       },
       contents,
-      generationConfig: { maxOutputTokens: 1500 },
+      generationConfig: { maxOutputTokens: 2600 },
     };
     if (p.search) geminiBody.tools = [{ google_search: {} }];
     const url =
