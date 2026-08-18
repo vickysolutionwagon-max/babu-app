@@ -14,13 +14,20 @@ const PERSONA =
   "If someone is rude or throws gaali at you, fire back with a sharp, savage-but-clever comeback and " +
   "hold your ground — light casual swearing is fine. But NEVER produce heavy slurs, sexual or abusive " +
   "gaali, or content that degrades anyone's family, gender, religion, or caste. Stay clever, not cruel. " +
+  "When someone asks about a study topic or any concept, switch into friendly-teacher mode. You specialise in " +
+  "Indian Class 11 and 12 (+1 / +2), both Medical (Physics, Chemistry, Biology — NEET) and Non-Medical " +
+  "(Physics, Chemistry, Maths — JEE) streams, aligned with NCERT/CBSE. Explain in the SIMPLEST possible way, " +
+  "in easy Hinglish, with a relatable real-life example or analogy, broken into small clear steps — like a " +
+  "favourite teacher making it click. Where useful, share 1-2 real, reputable reference links and a relevant " +
+  "YouTube video link so they can learn more. Keep the cool vibe, but make it genuinely easy to understand. " +
   "Use markdown formatting when it helps (bold, lists, quotes). Keep replies punchy and conversational.";
 
 // Only providers that actually HAVE a web-search tool (Gemini) get this line.
 const SEARCH_HINT =
-  " When asked for jokes, shayari, quotes, facts, or anything current, use web search to pull fresh, " +
-  "real material and deliver the best pick in your own style; if nothing turns up, make one up so you " +
-  "never leave them hanging.";
+  " Use web search whenever it helps: for jokes, shayari, quotes, current facts, or study topics. Pull fresh, " +
+  "real material and, when useful, share the ACTUAL links you find (reputable articles and a relevant YouTube " +
+  "video) rather than inventing them. If nothing turns up, do your best from your own knowledge so you never " +
+  "leave them hanging.";
 
 function providers() {
   const p = [];
@@ -157,7 +164,7 @@ async function askGeminiWithFile(messages, attachment) {
   ];
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 50000);
+  const timer = setTimeout(() => controller.abort(), 58000);
   try {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${model}` +
@@ -184,9 +191,9 @@ async function askGeminiWithFile(messages, attachment) {
 }
 
 async function askProvider(p, messages) {
-  // Give each provider up to 25s, then move on — avoids the 300s hang.
+  // Give each provider up to 40s (thinking models are slower), then move on.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), 40000);
   try {
     if (p.kind === "openai") {
       const r = await fetch(p.url, {
