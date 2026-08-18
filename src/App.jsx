@@ -571,7 +571,11 @@ export default function App() {
           <button style={S.skipBtn} className="skip-btn" onClick={() => login("Guest")}>
             Skip for now
           </button>
-          <p style={S.loginNote}>Saved on this device • no password needed</p>
+          <p style={S.loginNote}>Saved only on your device • no login, no password</p>
+          <p style={S.loginNote2}>
+            We don't store your chats on any server — everything stays private in
+            your own browser.
+          </p>
         </div>
       </div>
     );
@@ -590,9 +594,11 @@ export default function App() {
     <div style={S.page}>
       <style>{CSS}</style>
       <Aurora />
-      {sidebar && <div style={S.scrim} onClick={() => setSidebar(false)} />}
 
       <div style={S.shell} className="pop-in shell-glow">
+        {sidebar && (
+          <div style={S.scrim} className="scrim" onClick={() => setSidebar(false)} />
+        )}
         <aside style={S.side} className={"side" + (sidebar ? " side-open" : "")}>
           <div style={S.sideHead}>
             <span style={S.sideTitle}>Chats</span>
@@ -827,7 +833,7 @@ const S = {
   introName: { marginTop: 26, fontSize: 36, fontWeight: 800, letterSpacing: "-0.5px" },
   introTag: { marginTop: 10, fontSize: 15.5, color: "rgba(255,255,255,0.72)" },
   introSkip: { position: "absolute", bottom: 26, left: 0, right: 0, textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.4)", zIndex: 2, letterSpacing: "0.3px" },
-  scrim: { position: "absolute", inset: 0, background: "rgba(10,8,24,0.5)", zIndex: 5 },
+  scrim: { position: "absolute", inset: 0, background: "rgba(10,8,24,0.5)", zIndex: 15, display: "none" },
   shell: { position: "relative", zIndex: 2, width: "100%", maxWidth: 900, height: "min(780px, 92vh)", display: "flex", background: "rgba(255,255,255,0.9)", backdropFilter: "blur(16px)", borderRadius: 26, border: "1px solid rgba(255,255,255,0.5)", boxShadow: "0 40px 90px -30px rgba(10,8,40,0.7)", overflow: "hidden" },
   side: { width: 240, flexShrink: 0, display: "flex", flexDirection: "column", background: "rgba(248,247,255,0.9)", borderRight: "1px solid rgba(23,19,39,0.07)" },
   sideHead: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 16px 10px" },
@@ -882,6 +888,7 @@ const S = {
   loginInput: { width: "100%", boxSizing: "border-box", border: "1px solid rgba(23,19,39,0.14)", borderRadius: 14, padding: "13px 15px", fontSize: 15, fontFamily: "inherit", outline: "none", color: INK, marginBottom: 12 },
   loginBtn: { width: "100%", border: "none", borderRadius: 14, padding: "13px", fontSize: 15, fontWeight: 700, color: "#fff", background: `linear-gradient(135deg,${V1},${V2})`, cursor: "pointer", boxShadow: "0 12px 26px -8px rgba(124,92,255,0.7)" },
   loginNote: { margin: "16px 0 0", fontSize: 12, color: "#a49dbb" },
+  loginNote2: { margin: "8px 0 0", fontSize: 11.5, color: "#b3abca", lineHeight: 1.5 },
   skipBtn: { width: "100%", marginTop: 10, border: "none", background: "transparent", color: "#8b83a8", fontSize: 13.5, fontWeight: 600, cursor: "pointer", padding: "8px" },
 };
 
@@ -1005,6 +1012,7 @@ const CSS = `
     .side { position: absolute; top: 0; left: 0; width: 78%; max-width: 300px; z-index: 20; height: 100%; transform: translateX(-105%); transition: transform .28s cubic-bezier(.22,1,.36,1); box-shadow: 12px 0 40px -10px rgba(10,8,40,0.55); }
     .side.side-open { transform: translateX(0); }
     .menu-btn { display: flex; }
+    .scrim { display: block !important; }
     .shell-glow { border-radius: 20px; }
     .shell-glow::before { border-radius: 22px; }
   }
