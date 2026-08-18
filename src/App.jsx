@@ -225,8 +225,8 @@ export default function App() {
 
   const activeChat = chats.find((c) => c.id === activeId) || null;
 
-  function login() {
-    const name = loginName.trim();
+  function login(forcedName) {
+    const name = (forcedName ?? loginName).trim();
     if (!name) return;
     store.set("babu-profile", name);
     const list = store.get(chatsKey(name)) || [];
@@ -555,7 +555,7 @@ export default function App() {
           <img src={LOGO} alt="Babu" style={S.bigMarkImg} />
           <h1 style={S.loginTitle}>Babu</h1>
           <p style={S.loginSub}>
-            Enter a name to save your chats and pick up where you left off.
+            Add a name to save your chats — or just skip and start chatting.
           </p>
           <input
             style={S.loginInput}
@@ -565,8 +565,11 @@ export default function App() {
             onKeyDown={(e) => e.key === "Enter" && login()}
             autoFocus
           />
-          <button style={S.loginBtn} onClick={login} disabled={!loginName.trim()}>
+          <button style={S.loginBtn} onClick={() => login()} disabled={!loginName.trim()}>
             Continue
+          </button>
+          <button style={S.skipBtn} className="skip-btn" onClick={() => login("Guest")}>
+            Skip for now
           </button>
           <p style={S.loginNote}>Saved on this device • no password needed</p>
         </div>
@@ -879,6 +882,7 @@ const S = {
   loginInput: { width: "100%", boxSizing: "border-box", border: "1px solid rgba(23,19,39,0.14)", borderRadius: 14, padding: "13px 15px", fontSize: 15, fontFamily: "inherit", outline: "none", color: INK, marginBottom: 12 },
   loginBtn: { width: "100%", border: "none", borderRadius: 14, padding: "13px", fontSize: 15, fontWeight: 700, color: "#fff", background: `linear-gradient(135deg,${V1},${V2})`, cursor: "pointer", boxShadow: "0 12px 26px -8px rgba(124,92,255,0.7)" },
   loginNote: { margin: "16px 0 0", fontSize: 12, color: "#a49dbb" },
+  skipBtn: { width: "100%", marginTop: 10, border: "none", background: "transparent", color: "#8b83a8", fontSize: 13.5, fontWeight: 600, cursor: "pointer", padding: "8px" },
 };
 
 const CSS = `
@@ -930,6 +934,7 @@ const CSS = `
   @keyframes borderFlow { to { background-position: 300% center; } }
   .msg-in { animation: none; }
   .mic-on { animation: micPulse 1s ease-in-out infinite; }
+  .skip-btn:hover { color: ${V1}; text-decoration: underline; }
   @keyframes micPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,93,115,0.5); } 50% { box-shadow: 0 0 0 8px rgba(255,93,115,0); } }
 
   /* cinematic intro */
