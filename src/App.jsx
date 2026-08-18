@@ -82,6 +82,46 @@ function Markdown({ text }) {
       i++;
       continue;
     }
+    // table: a "| ... |" header row followed by a "|---|---|" separator
+    if (
+      line.trim().startsWith("|") &&
+      i + 1 < lines.length &&
+      /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) &&
+      lines[i + 1].includes("-")
+    ) {
+      const parseRow = (l) =>
+        l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+      const headers = parseRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        rows.push(parseRow(lines[i]));
+        i++;
+      }
+      blocks.push(
+        <div key={key++} className="md-table-wrap">
+          <table className="md-table">
+            <thead>
+              <tr>
+                {headers.map((h, hi) => (
+                  <th key={hi}>{mdInline(h, "th" + key + hi)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri}>
+                  {r.map((c, ci) => (
+                    <td key={ci}>{mdInline(c, "td" + key + ri + ci)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
     if (h) {
       blocks.push(
@@ -987,6 +1027,11 @@ const CSS = `
   .md-pre { background: #171327; color: #f2f0ff; padding: 12px 14px; border-radius: 12px; overflow-x: auto; margin: 8px 0; }
   .md-pre code { background: transparent; padding: 0; color: inherit; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85em; white-space: pre; }
   .md-link { color: #6a4fe0; text-decoration: underline; }
+  .md-table-wrap { overflow-x: auto; margin: 10px 0; -webkit-overflow-scrolling: touch; }
+  .md-table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  .md-table th, .md-table td { border: 1px solid rgba(23,19,39,0.14); padding: 7px 10px; text-align: left; vertical-align: top; }
+  .md-table th { background: rgba(124,92,255,0.1); font-weight: 700; color: ${INK}; }
+  .md-table tr:nth-child(even) td { background: rgba(124,92,255,0.035); }
   .bg-photo { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(24px) brightness(0.6) saturate(1.18); transform: scale(1.16); animation: bgDrift 32s ease-in-out infinite alternate; }
   .bg-overlay { position: absolute; inset: 0; background: radial-gradient(1100px 650px at 50% 18%, rgba(14,11,30,0.28), rgba(9,7,22,0.74) 82%); }
   @keyframes bgDrift { 0% { transform: scale(1.16) translate(0,0); } 100% { transform: scale(1.24) translate(-18px,-20px); } }
