@@ -136,7 +136,8 @@ export default async function handler(req, res) {
 
 async function askGeminiWithFile(messages, attachment) {
   const key = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  // Fast, low-latency multimodal model for reading images/PDFs (much quicker than the thinking model).
+  const model = process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash-lite";
 
   const hist = messages
     .slice(0, -1)
