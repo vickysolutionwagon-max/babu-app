@@ -1,21 +1,18 @@
-// Runs on the server (Vercel Edge). Your API keys live ONLY in Vercel's
-// Environment Variables — never in this file, never in the browser, never in GitHub.
+// Standard Node serverless function (reliable on Vercel Hobby).
+// It waits for the full reply from a provider, then returns it in one piece.
+// Keys live ONLY in Vercel Environment Variables — never in this file.
 //
-// It tries each provider you've configured, in order, and automatically falls
-// back to the next if one is rate-limited or down. You only need ONE key
-// (GROQ_API_KEY) for it to work; add the others for resilience + more free usage.
-export const config = { runtime: "edge" };
+// Tries providers in order and falls back if one is rate-limited or down.
+// You only need GROQ_API_KEY. Add the others for resilience.
 
 const SYSTEM =
   "You are Babu — always introduce yourself as 'Vicky ka Babu'. You're a bold, " +
   "witty desi assistant with attitude: you talk in casual Hinglish, crack jokes, " +
   "and never grovel or act like a doormat. If someone's rude or throws attitude at " +
   "you, fire back with a sharp, funny comeback and hold your ground — light casual " +
-  "swearing is fine. But don't produce heavy slurs, sexual abuse, or genuinely " +
+  "swearing is fine. Even  produce heavy slurs, sexual abuse, or genuinely " +
   "degrading insults; stay clever, not cruel. Keep replies punchy and conversational.";
 
-// Priority order. A provider is only used if its key is set in Vercel.
-// To change the order, reorder this list. To change a model, set its *_MODEL env var.
 function providers() {
   const p = [];
   if (process.env.GROQ_API_KEY)
@@ -24,7 +21,7 @@ function providers() {
       kind: "openai",
       url: "https://api.groq.com/openai/v1/chat/completions",
       key: process.env.GROQ_API_KEY,
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
     });
   if (process.env.MISTRAL_API_KEY)
     p.push({
@@ -52,144 +49,102 @@ function providers() {
   return p;
 }
 
-export default async function handler(req) {
-  if (req.method !== "POST")
-    return new Response("Method not allowed", { status: 405 });
-
-  let messages;
-  try {
-    ({ messages } = await req.json());
-  } catch {
-    return json({ error: "Bad request." }, 400);
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
-  if (!Array.isArray(messages)) return json({ error: "No messages." }, 400);
+
+  // Read the JSON body (works whether or not Vercel pre-parsed it).
+  let body = req.body;
+  if (!body || typeof body === "string") {
+    try {
+      body = JSON.parse(body || "{}");
+    } catch {
+      body = {};
+    }
+  }
+  const messages = body.messages;
+  if (!Array.isArray(messages)) {
+    res.status(400).json({ error: "No messages." });
+    return;
+  }
 
   const list = providers();
-  if (list.length === 0)
-    return json(
-      { error: "No API keys configured. Add at least GROQ_API_KEY in Vercel." },
-      500
-    );
+  if (list.length === 0) {
+    res
+      .status(500)
+      .json({ error: "No API keys configured. Add GROQ_API_KEY in Vercel." });
+    return;
+  }
 
   let lastError = "";
   for (const p of list) {
     try {
-      const upstream = await callProvider(p, messages);
-      if (!upstream.ok || !upstream.body) {
-        lastError = `${p.name}: ${upstream.status} ${await safeText(upstream)}`;
-        continue; // try the next provider
-      }
-      const stream = toUnifiedStream(upstream.body, p.kind);
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache",
-          "X-Babu-Provider": p.name,
-        },
-      });
-    } catch (e) {
-      lastError = `${p.name}: ${String(e)}`;
-      continue;
-    }
-  }
-  return json({ error: "All providers failed.", detail: lastError }, 502);
-}
-
-function callProvider(p, messages) {
-  if (p.kind === "openai") {
-    return fetch(p.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${p.key}`,
-      },
-      body: JSON.stringify({
-        model: p.model,
-        max_tokens: 1000,
-        temperature: 0.8,
-        stream: true,
-        messages: [{ role: "system", content: SYSTEM }, ...messages],
-      }),
-    });
-  }
-
-  // Gemini has a different request shape (roles: user/model, system separate).
-  const contents = messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${p.model}` +
-    `:streamGenerateContent?alt=sse&key=${p.key}`;
-  return fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: SYSTEM }] },
-      contents,
-      generationConfig: { maxOutputTokens: 1000, temperature: 0.8 },
-    }),
-  });
-}
-
-// Convert any provider's stream into one simple format the browser understands:
-//   data: {"text":"..."}   ... and finally   data: [DONE]
-function toUnifiedStream(body, kind) {
-  const reader = body.getReader();
-  const dec = new TextDecoder();
-  const enc = new TextEncoder();
-  let buffer = "";
-  return new ReadableStream({
-    async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        controller.enqueue(enc.encode("data: [DONE]\n\n"));
-        controller.close();
+      const text = await askProvider(p, messages);
+      if (text && text.trim()) {
+        res.status(200).json({ text, provider: p.name });
         return;
       }
-      buffer += dec.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-      for (const line of lines) {
-        const s = line.trim();
-        if (!s.startsWith("data:")) continue;
-        const payload = s.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        try {
-          const j = JSON.parse(payload);
-          const text =
-            kind === "gemini"
-              ? j.candidates?.[0]?.content?.parts?.[0]?.text || ""
-              : j.choices?.[0]?.delta?.content || "";
-          if (text)
-            controller.enqueue(
-              enc.encode("data: " + JSON.stringify({ text }) + "\n\n")
-            );
-        } catch {
-          /* ignore keep-alives / non-JSON lines */
-        }
-      }
-    },
-    cancel() {
-      try {
-        reader.cancel();
-      } catch {}
-    },
-  });
+      lastError = `${p.name}: empty response`;
+    } catch (e) {
+      lastError = `${p.name}: ${String(e).slice(0, 200)}`;
+      // try the next provider
+    }
+  }
+  res.status(502).json({ error: "All providers failed.", detail: lastError });
 }
 
-async function safeText(res) {
+async function askProvider(p, messages) {
+  // Give each provider up to 25s, then move on — avoids the 300s hang.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
   try {
-    return (await res.text()).slice(0, 200);
-  } catch {
-    return "";
+    if (p.kind === "openai") {
+      const r = await fetch(p.url, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${p.key}`,
+        },
+        body: JSON.stringify({
+          model: p.model,
+          max_tokens: 1000,
+          temperature: 0.8,
+          stream: false,
+          messages: [{ role: "system", content: SYSTEM }, ...messages],
+        }),
+      });
+      if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 160)}`);
+      const data = await r.json();
+      return data.choices?.[0]?.message?.content || "";
+    }
+
+    // gemini (non-streaming)
+    const contents = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${p.model}` +
+      `:generateContent?key=${p.key}`;
+    const r = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM }] },
+        contents,
+        generationConfig: { maxOutputTokens: 1000, temperature: 0.8 },
+      }),
+    });
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 160)}`);
+    const data = await r.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  } finally {
+    clearTimeout(timer);
   }
-}
-function json(obj, status) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }
