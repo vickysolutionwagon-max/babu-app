@@ -183,11 +183,14 @@ export default function App() {
   const [textFiles, setTextFiles] = useState([]); // [{ name, text }]
   const [showIntro, setShowIntro] = useState(true);
   const [introExit, setIntroExit] = useState(false);
+  const [listening, setListening] = useState(false);
 
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const fileRef = useRef(null);
   const abortRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const micBaseRef = useRef("");
   const dirty = useRef(false);
 
   useEffect(() => {
@@ -378,6 +381,43 @@ export default function App() {
 
   function stopGenerating() {
     abortRef.current?.abort();
+  }
+
+  function toggleMic() {
+    const SR =
+      typeof window !== "undefined" &&
+      (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) {
+      setError("Is browser mein voice input support nahi hai — Chrome try karo.");
+      return;
+    }
+    if (listening) {
+      recognitionRef.current && recognitionRef.current.stop();
+      return;
+    }
+    const rec = new SR();
+    rec.lang = "en-IN";
+    rec.interimResults = true;
+    rec.continuous = false;
+    micBaseRef.current = input ? input.trim() + " " : "";
+    rec.onresult = (e) => {
+      let txt = "";
+      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      setInput(micBaseRef.current + txt);
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => {
+      setListening(false);
+      inputRef.current?.focus();
+    };
+    recognitionRef.current = rec;
+    try {
+      rec.start();
+      setListening(true);
+      setError(null);
+    } catch {
+      setListening(false);
+    }
   }
 
   /* ---------- file handling ---------- */
@@ -700,6 +740,18 @@ export default function App() {
                   />
                 </svg>
               </button>
+              <button
+                onClick={toggleMic}
+                style={{ ...S.attachBtn, ...(listening ? S.micActive : {}) }}
+                className={"attach mic-btn" + (listening ? " mic-on" : "")}
+                aria-label="Voice input"
+                title={listening ? "Sun raha hoon… (tap to stop)" : "Bolke likho"}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+                  <path d="M5 11a7 7 0 0014 0M12 18v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
               <textarea
                 ref={inputRef}
                 rows={1}
@@ -812,6 +864,7 @@ const S = {
   composerWrap: { borderTop: "1px solid rgba(23,19,39,0.06)", background: "rgba(255,255,255,0.6)" },
   composer: { display: "flex", alignItems: "flex-end", gap: 8, padding: 14 },
   attachBtn: { width: 40, height: 44, flexShrink: 0, borderRadius: 14, border: "1px solid rgba(23,19,39,0.12)", background: "#fff", color: "#6b6488", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
+  micActive: { background: "linear-gradient(135deg,#ff5d73,#ff8a5b)", color: "#fff", borderColor: "transparent" },
   pending: { display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 14px 0" },
   pendChip: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 500, color: "#5a4fd0", background: "rgba(124,92,255,0.09)", border: "1px solid rgba(124,92,255,0.22)", borderRadius: 999, padding: "5px 6px 5px 12px" },
   pendX: { border: "none", background: "transparent", color: "#8b83a8", fontSize: 16, lineHeight: 1, cursor: "pointer", padding: "0 2px" },
@@ -876,6 +929,8 @@ const CSS = `
   .shell-glow::before { content: ""; position: absolute; inset: -2px; border-radius: 28px; padding: 2px; background: linear-gradient(120deg, ${V1}, ${TEAL}, #ff6bcb, ${V1}); background-size: 300% 300%; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0.5; animation: borderFlow 6s linear infinite; pointer-events: none; z-index: 3; }
   @keyframes borderFlow { to { background-position: 300% center; } }
   .msg-in { animation: none; }
+  .mic-on { animation: micPulse 1s ease-in-out infinite; }
+  @keyframes micPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,93,115,0.5); } 50% { box-shadow: 0 0 0 8px rgba(255,93,115,0); } }
 
   /* cinematic intro */
   .intro-wrap { cursor: pointer; transition: opacity .6s ease, transform .6s ease; }
